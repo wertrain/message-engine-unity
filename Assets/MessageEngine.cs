@@ -3,30 +3,74 @@ using System.Collections;
 
 public class MessageEngine
 {
+    /**
+     * メッセージエンジンの各種パラメータ
+     **/
+    public struct Param
+    {
+        /** 最大行数 */
+        public int TextLine { get; set; }
+        /** 1行におけるテキストの長さ */
+        public int TextLengthInLine { get; set; }
+        /** 1ページにおけるテキストの長さ */
+        public int TextLengthInPage { get; set; }
+        /** 1文字を表示する間隔（秒） */
+        public float IntervalPrintChar { get; set; }
+    }
+
+    /** エンジンのパラメータ */
+    private Param engineParam;
+    /** 文字表示UI */
     private UnityEngine.UI.Text messageUI;
+    /** 表示するメッセージ全文 */
     private string allMessage;
-    private string currentMessage;
+    /** 現在表示中のメッセージの開始インデックス */
     private int messageStartIndex;
+    /** 現在表示中のメッセージの終了インデックス */
     private int messageEndIndex;
-
-    private int maxTextLine;
-    private int maxTextInLine;
-    private int maxTextLengthInPage;
-
+    /** 現在表示中のメッセージ */
+    private string currentMessage;
+    /** 現在表示中のメッセージのインデックス */
     private int currentIndex;
-    private bool messageExit;
+    /** 時刻をカウント */
+    private float currentTime;
+
+    private enum Sequence
+    {
+        Idle,           /** 待機中 */
+        MakePage,       /** ページメッセージ作成中 */
+        Progress,       /** 進行中 */
+        WaitNextPage,   /** ページ送り待機中 */
+        Complete,       /** 動作完了 */
+    };
+    /** エンジンのシーケンス */
+    private Sequence sequence;
 
     public MessageEngine(UnityEngine.UI.Text uiText)
     {
         messageUI = uiText;
+        engineParam = GetDefaultParam();
+        allMessage = string.Empty;
         messageStartIndex = 0;
         messageEndIndex = 0;
-        maxTextLine = 4;
-        maxTextInLine = 28;
-        maxTextLengthInPage = maxTextInLine * maxTextLine;
         currentIndex = 0;
         currentMessage = string.Empty;
-        messageExit = false;
+        sequence = Sequence.Idle;
+    }
+
+    public Param GetDefaultParam()
+    {
+        Param param = new Param();
+        param.TextLine = 4;
+        param.TextLengthInLine = 22;
+        param.TextLengthInPage = param.TextLengthInLine * param.TextLine;
+        param.IntervalPrintChar = 0.05f;
+        return param;
+    }
+
+    public void SetParam(Param param)
+    {
+        engineParam = param;
     }
 
     public void SetMessage(string message)
@@ -34,55 +78,111 @@ public class MessageEngine
         allMessage = message;
     }
 
-    public void Update()
+    public bool Start(string message)
     {
-        if (messageUI == null) return;
-        if (messageExit) return;
-
-        if (currentMessage.Length == 0)
+        if (sequence == Sequence.Idle || sequence == Sequence.Complete)
         {
-            currentMessage = allMessage.Substring(messageStartIndex, Mathf.Min(maxTextLengthInPage, allMessage.Length - messageStartIndex));
-            char[] currentMessageCharArray = currentMessage.ToCharArray();
-            currentMessage = string.Empty;
+            allMessage = message;
 
-            int lineCount = 0;
-            bool exit = false;
-            for (int i = 0; i < currentMessageCharArray.Length; ++i)
+            if (allMessage.Length > 0)
             {
-                char c = currentMessageCharArray[i];
-                currentMessage += c;
-                if (++lineCount > maxTextInLine)
-                {
-                    currentMessage += '\n';
-                    lineCount = 0;
-                }
-                switch (c)
-                {
-                    case '\n':
-                        lineCount = 0;
-                        if (++lineCount >= maxTextLine)
-                            exit = true;
-                        break;
-                }
-                messageEndIndex = messageStartIndex + i;
-                if (exit)
-                {
-                    break;
-                }
+                sequence = Sequence.MakePage;
+                return true;
             }
         }
+        return false;
+    }
 
-        if (++currentIndex >= currentMessage.Length)
+    public bool NextPage()
+    {
+        switch (sequence)
         {
-            currentMessage = string.Empty;
-            messageStartIndex = messageEndIndex;
-            if (messageStartIndex >= allMessage.Length)
-                messageExit = true;
-            currentIndex = 0;
+            case Sequence.Progress:
+                messageUI.text = currentMessage;
+                messageStartIndex = messageEndIndex;
+                sequence = Sequence.WaitNextPage;
+                return true;
+            case Sequence.WaitNextPage:
+                SequenceMakePage();
+                return true;
         }
-        else
+        return false;
+    }
+
+    public void Update()
+    {
+        switch(sequence)
         {
-            messageUI.text = currentMessage.Substring(0, currentIndex);
+            case Sequence.MakePage:
+                SequenceMakePage();
+                break;
+            case Sequence.Progress:
+                SequenceProgress();
+                break;
+        }
+    }
+
+    private void SequenceMakePage()
+    {
+        currentMessage = allMessage.Substring(messageStartIndex, Mathf.Min(engineParam.TextLengthInPage, allMessage.Length - messageStartIndex));
+        char[] currentMessageCharArray = currentMessage.ToCharArray();
+        currentMessage = string.Empty;
+
+        int charCount = 0;
+        int lineCount = 0;
+        bool exit = false;
+        for (int i = 0; i < currentMessageCharArray.Length; ++i)
+        {
+            char c = currentMessageCharArray[i];
+            currentMessage += c;
+            // 文字ごとの処理
+            // ここでタグなどの判定が必要
+            switch (c)
+            {
+                case '\n':
+                    charCount = 0;
+                    if (++lineCount >= engineParam.TextLine)
+                        exit = true;
+                    break;
+                case '<':
+
+                    break;
+            }
+            // 一行に表示する最大文字数に達した場合は改行を追加する
+            if (++charCount > engineParam.TextLengthInLine)
+            {
+                // 直前に追加した文字が改行だった場合は追加しない
+                if (c != '\n') currentMessage += '\n';
+
+                charCount = 0;
+                if (++lineCount >= engineParam.TextLine)
+                    exit = true;
+            }
+            // 今回のテキストの終端を保持しておく
+            messageEndIndex = messageStartIndex + i;
+            if (exit) break;
+        }
+        currentTime = Time.time;
+        sequence = Sequence.Progress;
+        currentIndex = 0;
+    }
+
+    private void SequenceProgress()
+    {
+        // 指定された時間が経てば文字列の更新処理
+        if (currentTime + engineParam.IntervalPrintChar < Time.time)
+        {
+            currentTime = Time.time;
+            if (++currentIndex >= currentMessage.Length)
+            {
+                messageStartIndex = messageEndIndex;
+                if (messageStartIndex < allMessage.Length) sequence = Sequence.WaitNextPage;
+                else sequence = Sequence.Complete;
+            }
+            else if (messageUI != null)
+            {
+                messageUI.text = currentMessage.Substring(0, currentIndex);
+            }
         }
     }
 }

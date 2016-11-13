@@ -1,5 +1,5 @@
 ﻿using UnityEngine;
-using System.Collections;
+using System.Collections.Generic;
 
 public class MessageEngine
 {
@@ -34,6 +34,12 @@ public class MessageEngine
     private int currentIndex;
     /** 時刻をカウント */
     private float currentTime;
+    /** 0.5文字としてカウントする文字列 */
+    private readonly static char[] halfChars =
+        ("abcdefghijklmnopqrstuvwxyz" +
+         "ABCDEFGHIJKLMNOPQRSTUVWXYZ" +
+         "0123456789" +
+         "<>=/()[].,").ToCharArray();
 
     private enum Sequence
     {
@@ -46,6 +52,17 @@ public class MessageEngine
     /** エンジンのシーケンス */
     private Sequence sequence;
 
+    private enum EngineEventType
+    {
+        Wait,           /** ページ送り */
+    };
+    private struct EngineEvent
+    {
+        public int Index { get; set; }
+        public EngineEventType Type { get; set; }
+    }
+    private List<EngineEvent> eventList;
+
     public MessageEngine(UnityEngine.UI.Text uiText)
     {
         messageUI = uiText;
@@ -56,6 +73,7 @@ public class MessageEngine
         currentIndex = 0;
         currentMessage = string.Empty;
         sequence = Sequence.Idle;
+        eventList = new List<EngineEvent>();
     }
 
     public Param GetDefaultParam()
@@ -63,7 +81,7 @@ public class MessageEngine
         Param param = new Param();
         param.TextLine = 4;
         param.TextLengthInLine = 22;
-        param.TextLengthInPage = param.TextLengthInLine * param.TextLine;
+        param.TextLengthInPage = param.TextLengthInLine * (param.TextLine + 1);
         param.IntervalPrintChar = 0.05f;
         return param;
     }
@@ -127,8 +145,9 @@ public class MessageEngine
         currentMessage = allMessage.Substring(messageStartIndex, Mathf.Min(engineParam.TextLengthInPage, allMessage.Length - messageStartIndex));
         char[] currentMessageCharArray = currentMessage.ToCharArray();
         currentMessage = string.Empty;
+        eventList.Clear();
 
-        int charCount = 0;
+        float charCount = 0;
         int lineCount = 0;
         bool exit = false;
         for (int i = 0; i < currentMessageCharArray.Length; ++i)
@@ -145,11 +164,17 @@ public class MessageEngine
                         exit = true;
                     break;
                 case '<':
-
+                    exit = true;
+                    break;
+                case '-':
+                    EngineEvent engineEvent = new EngineEvent() { Index = i, Type = EngineEventType.Wait };
+                    eventList.Add(engineEvent);
                     break;
             }
+            // プロポーショナルフォントへの適当な対応
+            charCount += (System.Array.Exists<char>(halfChars, item => item == c)) ? 0.5f : 1.0f;
             // 一行に表示する最大文字数に達した場合は改行を追加する
-            if (++charCount > engineParam.TextLengthInLine)
+            if (charCount > engineParam.TextLengthInLine)
             {
                 // 直前に追加した文字が改行だった場合は追加しない
                 if (c != '\n') currentMessage += '\n';
@@ -159,7 +184,7 @@ public class MessageEngine
                     exit = true;
             }
             // 今回のテキストの終端を保持しておく
-            messageEndIndex = messageStartIndex + i;
+            messageEndIndex = messageStartIndex + i + 1;
             if (exit) break;
         }
         currentTime = Time.time;
@@ -181,6 +206,17 @@ public class MessageEngine
             }
             else if (messageUI != null)
             {
+                int findIndex = eventList.FindIndex(item => item.Index == currentIndex);
+                if (findIndex > 0)
+                {
+                    EngineEvent engineEvent = eventList[findIndex];
+                    switch (engineEvent.Type)
+                    {
+                        case EngineEventType.Wait:
+                            break;
+                    }
+                    eventList.Remove(engineEvent);
+                }
                 messageUI.text = currentMessage.Substring(0, currentIndex);
             }
         }

@@ -2,7 +2,7 @@
 using System.Collections;
 
 /**
- * 禁則処理と自動開業に対応したメッセージウィンドウクラス
+ * 禁則処理と自動改行に対応したメッセージウィンドウクラス
  **/
 public class MessageWindow : MonoBehaviour {
 

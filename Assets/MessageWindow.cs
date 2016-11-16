@@ -52,7 +52,7 @@ public class MessageWindow : UIBehaviour
         UpdateText(text);
     }
 
-    void UpdateText(string str)
+    public void UpdateText(string str)
     {
         // update Text
         _Text.text = GetFormatedText(_Text, str);
@@ -81,6 +81,16 @@ public class MessageWindow : UIBehaviour
         return textComp.preferredWidth;
     }
 
+    float GetTextHeight(Text textComp, string message)
+    {
+        if (_text.supportRichText)
+        {
+            message = Regex.Replace(message, RITCH_TEXT_REPLACE, string.Empty);
+        }
+        textComp.text = message;
+        return textComp.preferredHeight;
+    }
+
     string GetFormatedText(Text textComp, string msg)
     {
         if (string.IsNullOrEmpty(msg))
@@ -93,7 +103,7 @@ public class MessageWindow : UIBehaviour
 
         // override
         textComp.horizontalOverflow = HorizontalWrapMode.Overflow;
-
+        
         // work
         StringBuilder lineBuilder = new StringBuilder();
 
@@ -116,12 +126,15 @@ public class MessageWindow : UIBehaviour
                 if (lineWidth > rectWidth)
                 {
                     lineBuilder.Append(Environment.NewLine);
+                    if (_RectTransform.rect.height < GetTextHeight(textComp, lineBuilder.ToString()))
+                    {
+                        break;
+                    }
                     lineWidth = GetTextWidth(textComp, originalLine);
                 }
             }
             lineBuilder.Append(originalLine);
         }
-
         return lineBuilder.ToString();
     }
 

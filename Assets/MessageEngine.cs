@@ -175,7 +175,6 @@ public class MessageEngine
 
     private string GetFormatedText(string msg)
     {
-        Debug.logger.Log(msg);
         if (string.IsNullOrEmpty(msg))
         {
             return string.Empty;

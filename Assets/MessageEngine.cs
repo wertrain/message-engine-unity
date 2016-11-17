@@ -1,5 +1,8 @@
 ﻿using UnityEngine;
 using System.Collections.Generic;
+using System.Text.RegularExpressions;
+using System.Text;
+using System;
 
 public class MessageEngine
 {
@@ -8,12 +11,6 @@ public class MessageEngine
      **/
     public struct Param
     {
-        /** 最大行数 */
-        public int TextLine { get; set; }
-        /** 1行におけるテキストの長さ */
-        public int TextLengthInLine { get; set; }
-        /** 1ページにおけるテキストの長さ */
-        public int TextLengthInPage { get; set; }
         /** 1文字を表示する間隔（秒） */
         public float IntervalPrintChar { get; set; }
     }
@@ -24,10 +21,8 @@ public class MessageEngine
     private UnityEngine.UI.Text messageUI;
     /** 表示するメッセージ全文 */
     private string allMessage;
-    /** 現在表示中のメッセージの開始インデックス */
-    private int messageStartIndex;
-    /** 現在表示中のメッセージの終了インデックス */
-    private int messageEndIndex;
+    /** 次のメッセージ開始インデックス */
+    private int nextMessageIndex;
     /** 現在表示中のメッセージ */
     private string currentMessage;
     /** 現在表示中のメッセージのインデックス */
@@ -68,9 +63,8 @@ public class MessageEngine
         messageUI = uiText;
         engineParam = GetDefaultParam();
         allMessage = string.Empty;
-        messageStartIndex = 0;
-        messageEndIndex = 0;
         currentIndex = 0;
+        nextMessageIndex = 0;
         currentMessage = string.Empty;
         sequence = Sequence.Idle;
         eventList = new List<EngineEvent>();
@@ -79,9 +73,6 @@ public class MessageEngine
     public Param GetDefaultParam()
     {
         Param param = new Param();
-        param.TextLine = 4;
-        param.TextLengthInLine = 22;
-        param.TextLengthInPage = param.TextLengthInLine * (param.TextLine + 1);
         param.IntervalPrintChar = 0.05f;
         return param;
     }
@@ -117,7 +108,6 @@ public class MessageEngine
         {
             case Sequence.Progress:
                 messageUI.text = currentMessage;
-                messageStartIndex = messageEndIndex;
                 sequence = Sequence.WaitNextPage;
                 return true;
             case Sequence.WaitNextPage:
@@ -142,54 +132,13 @@ public class MessageEngine
 
     private void SequenceMakePage()
     {
-        currentMessage = allMessage.Substring(messageStartIndex, Mathf.Min(engineParam.TextLengthInPage, allMessage.Length - messageStartIndex));
-        char[] currentMessageCharArray = currentMessage.ToCharArray();
-        currentMessage = string.Empty;
-        eventList.Clear();
+        string tmp = allMessage.Substring(nextMessageIndex);
+        currentMessage = GetFormatedText(tmp);
 
-        float charCount = 0;
-        int lineCount = 0;
-        bool exit = false;
-        for (int i = 0; i < currentMessageCharArray.Length; ++i)
-        {
-            char c = currentMessageCharArray[i];
-            currentMessage += c;
-            // 文字ごとの処理
-            // ここでタグなどの判定が必要
-            switch (c)
-            {
-                case '\n':
-                    charCount = 0;
-                    if (++lineCount >= engineParam.TextLine)
-                        exit = true;
-                    break;
-                case '<':
-                    exit = true;
-                    break;
-                case '-':
-                    EngineEvent engineEvent = new EngineEvent() { Index = i, Type = EngineEventType.Wait };
-                    eventList.Add(engineEvent);
-                    break;
-            }
-            // プロポーショナルフォントへの適当な対応
-            charCount += (System.Array.Exists<char>(halfChars, item => item == c)) ? 0.5f : 1.0f;
-            // 一行に表示する最大文字数に達した場合は改行を追加する
-            if (charCount > engineParam.TextLengthInLine)
-            {
-                // 直前に追加した文字が改行だった場合は追加しない
-                if (c != '\n') currentMessage += '\n';
-
-                charCount = 0;
-                if (++lineCount >= engineParam.TextLine)
-                    exit = true;
-            }
-            // 今回のテキストの終端を保持しておく
-            messageEndIndex = messageStartIndex + i + 1;
-            if (exit) break;
-        }
         currentTime = Time.time;
         sequence = Sequence.Progress;
         currentIndex = 0;
+        messageUI.text = string.Empty;
     }
 
     private void SequenceProgress()
@@ -200,8 +149,7 @@ public class MessageEngine
             currentTime = Time.time;
             if (++currentIndex >= currentMessage.Length)
             {
-                messageStartIndex = messageEndIndex;
-                if (messageStartIndex < allMessage.Length) sequence = Sequence.WaitNextPage;
+                if (nextMessageIndex < allMessage.Length) sequence = Sequence.WaitNextPage;
                 else sequence = Sequence.Complete;
             }
             else if (messageUI != null)
@@ -220,5 +168,156 @@ public class MessageEngine
                 messageUI.text = currentMessage.Substring(0, currentIndex);
             }
         }
+    }
+
+    // 以下は禁則処理の対応など
+    // 参考 https://github.com/tsubaki/HyphenationJpn_uGUI/blob/master/Assets/HyphenationJpn.cs
+
+    private string GetFormatedText(string msg)
+    {
+        Debug.logger.Log(msg);
+        if (string.IsNullOrEmpty(msg))
+        {
+            return string.Empty;
+        }
+
+        RectTransform rectTransform = messageUI.rectTransform;
+        float rectWidth = rectTransform.rect.width;
+        float spaceCharacterWidth = GetSpaceWidth();
+
+        // override
+        messageUI.horizontalOverflow = HorizontalWrapMode.Overflow;
+
+        // work
+        StringBuilder lineBuilder = new StringBuilder();
+        StringBuilder originalMessage = new StringBuilder();
+
+        float lineWidth = 0;
+
+        foreach (var originalLine in GetWordList(msg))
+        {
+            lineWidth += GetTextWidth(originalLine);
+            originalMessage.Append(originalLine);
+
+            if (originalLine == Environment.NewLine)
+            {
+                lineWidth = 0;
+            }
+            else
+            {
+                if (originalLine == " ")
+                {
+                    lineWidth += spaceCharacterWidth;
+                }
+
+                if (lineWidth > rectWidth)
+                {
+                    lineBuilder.Append(Environment.NewLine);
+                    if (rectTransform.rect.height < GetTextHeight(lineBuilder.ToString()))
+                    {
+                        break;
+                    }
+                    lineWidth = GetTextWidth(originalLine);
+                }
+            }
+            lineBuilder.Append(originalLine);
+        }
+        nextMessageIndex += originalMessage.Length - 1;
+        return lineBuilder.ToString();
+    }
+
+    private List<string> GetWordList(string tmpText)
+    {
+        List<string> words = new List<string>();
+        StringBuilder line = new StringBuilder();
+        char emptyChar = new char();
+
+        for (int characterCount = 0; characterCount < tmpText.Length; characterCount++)
+        {
+            char currentCharacter = tmpText[characterCount];
+            char nextCharacter = (characterCount < tmpText.Length - 1) ? tmpText[characterCount + 1] : emptyChar;
+            char preCharacter = (characterCount > 0) ? preCharacter = tmpText[characterCount - 1] : emptyChar;
+
+            line.Append(currentCharacter);
+
+            if (((IsLatin(currentCharacter) && IsLatin(preCharacter)) && (IsLatin(currentCharacter) && !IsLatin(preCharacter))) ||
+                (!IsLatin(currentCharacter) && CHECK_HYP_BACK(preCharacter)) ||
+                (!IsLatin(nextCharacter) && !CHECK_HYP_FRONT(nextCharacter) && !CHECK_HYP_BACK(currentCharacter)) ||
+                (characterCount == tmpText.Length - 1))
+            {
+                words.Add(line.ToString());
+                line = new StringBuilder();
+                continue;
+            }
+        }
+        return words;
+    }
+
+    // static
+    private readonly static string RITCH_TEXT_REPLACE =
+        "(\\<color=.*\\>|</color>|" +
+        "\\<size=.n\\>|</size>|" +
+        "<b>|</b>|" +
+        "<i>|</i>)";
+
+    // 禁則処理 http://ja.wikipedia.org/wiki/%E7%A6%81%E5%89%87%E5%87%A6%E7%90%86
+    // 行頭禁則文字
+    private readonly static char[] HYP_FRONT =
+        (",)]｝、。）〕〉》」』】〙〗〟’”｠»" +// 終わり括弧類 簡易版
+         "ァィゥェォッャュョヮヵヶっぁぃぅぇぉっゃゅょゎ" +//行頭禁則和字 
+         "‐゠–〜ー" +//ハイフン類
+         "?!！？‼⁇⁈⁉" +//区切り約物
+         "・:;" +//中点類
+         "。.").ToCharArray();//句点類
+
+    private readonly static char[] HYP_BACK =
+         "(（[｛〔〈《「『【〘〖〝‘“｟«".ToCharArray();//始め括弧類
+
+    private readonly static char[] HYP_LATIN =
+        ("abcdefghijklmnopqrstuvwxyz" +
+         "ABCDEFGHIJKLMNOPQRSTUVWXYZ" +
+         "0123456789" +
+         "<>=/().,").ToCharArray();
+
+    private static bool CHECK_HYP_FRONT(char str)
+    {
+        return Array.Exists<char>(HYP_FRONT, item => item == str);
+    }
+
+    private static bool CHECK_HYP_BACK(char str)
+    {
+        return Array.Exists<char>(HYP_BACK, item => item == str);
+    }
+
+    private static bool IsLatin(char s)
+    {
+        return Array.Exists<char>(HYP_LATIN, item => item == s);
+    }
+
+    float GetSpaceWidth()
+    {
+        float tmp0 = GetTextWidth("m m");
+        float tmp1 = GetTextWidth("mm");
+        return (tmp0 - tmp1);
+    }
+
+    float GetTextWidth(string message)
+    {
+        if (messageUI.supportRichText)
+        {
+            message = Regex.Replace(message, RITCH_TEXT_REPLACE, string.Empty);
+        }
+        messageUI.text = message;
+        return messageUI.preferredWidth;
+    }
+
+    float GetTextHeight(string message)
+    {
+        if (messageUI.supportRichText)
+        {
+            message = Regex.Replace(message, RITCH_TEXT_REPLACE, string.Empty);
+        }
+        messageUI.text = message;
+        return messageUI.preferredHeight;
     }
 }

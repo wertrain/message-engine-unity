@@ -29,12 +29,6 @@ public class MessageEngine
     private int currentIndex;
     /** 時刻をカウント */
     private float currentTime;
-    /** 0.5文字としてカウントする文字列 */
-    private readonly static char[] halfChars =
-        ("abcdefghijklmnopqrstuvwxyz" +
-         "ABCDEFGHIJKLMNOPQRSTUVWXYZ" +
-         "0123456789" +
-         "<>=/()[].,").ToCharArray();
 
     private enum Sequence
     {
@@ -192,13 +186,16 @@ public class MessageEngine
         StringBuilder originalMessage = new StringBuilder();
 
         float lineWidth = 0;
-
         foreach (var originalLine in GetWordList(msg))
         {
-            lineWidth += GetTextWidth(originalLine);
-            originalMessage.Append(originalLine);
+            string newText = lineBuilder.ToString() + originalLine;
+            if (rectTransform.rect.height <= GetTextHeight(newText))
+                break;
 
-            if (originalLine == Environment.NewLine)
+            lineWidth += GetTextWidth(originalLine);
+
+            if (originalLine.IndexOf('\n') != -1 || 
+                originalLine == Environment.NewLine)
             {
                 lineWidth = 0;
             }
@@ -212,16 +209,17 @@ public class MessageEngine
                 if (lineWidth > rectWidth)
                 {
                     lineBuilder.Append(Environment.NewLine);
-                    if (rectTransform.rect.height < GetTextHeight(lineBuilder.ToString()))
-                    {
-                        break;
-                    }
                     lineWidth = GetTextWidth(originalLine);
+                    
+                    if (rectTransform.rect.height <= GetTextHeight(lineBuilder.ToString()))
+                        break;
                 }
             }
+            originalMessage.Append(originalLine);
             lineBuilder.Append(originalLine);
         }
-        nextMessageIndex += originalMessage.Length - 1;
+
+        nextMessageIndex += originalMessage.Length;
         return lineBuilder.ToString();
     }
 
@@ -293,14 +291,22 @@ public class MessageEngine
         return Array.Exists<char>(HYP_LATIN, item => item == s);
     }
 
-    float GetSpaceWidth()
+    private float GetSpaceWidth()
     {
         float tmp0 = GetTextWidth("m m");
         float tmp1 = GetTextWidth("mm");
         return (tmp0 - tmp1);
     }
 
-    float GetTextWidth(string message)
+    private float GetLineHeight()
+    {
+        messageUI.text = "m";
+        float height = messageUI.preferredWidth;
+        messageUI.text = string.Empty;
+        return height;
+    }
+
+    private float GetTextWidth(string message)
     {
         if (messageUI.supportRichText)
         {
@@ -310,7 +316,7 @@ public class MessageEngine
         return messageUI.preferredWidth;
     }
 
-    float GetTextHeight(string message)
+    private float GetTextHeight(string message)
     {
         if (messageUI.supportRichText)
         {

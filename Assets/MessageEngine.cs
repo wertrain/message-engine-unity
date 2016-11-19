@@ -194,7 +194,7 @@ public class MessageEngine
 
             lineWidth += GetTextWidth(originalLine);
 
-            if (originalLine.IndexOf('\n') != -1 || 
+            if (originalLine.IndexOf('\n') > 0 || 
                 originalLine == Environment.NewLine)
             {
                 lineWidth = 0;

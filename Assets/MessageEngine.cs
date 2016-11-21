@@ -228,6 +228,7 @@ public class MessageEngine
         List<string> words = new List<string>();
         StringBuilder line = new StringBuilder();
         char emptyChar = new char();
+        bool checkEvent = false;
 
         for (int characterCount = 0; characterCount < tmpText.Length; characterCount++)
         {
@@ -235,6 +236,28 @@ public class MessageEngine
             char nextCharacter = (characterCount < tmpText.Length - 1) ? tmpText[characterCount + 1] : emptyChar;
             char preCharacter = (characterCount > 0) ? preCharacter = tmpText[characterCount - 1] : emptyChar;
 
+            // イベントの処理（仮）
+            if (checkEvent)
+            {
+                switch (nextCharacter)
+                {
+                    case 'p':
+                        eventList.Add(new EngineEvent() {
+                            Index = line.Length,
+                            Type = EngineEventType.Wait,
+                        });
+                        break;
+                }
+                checkEvent = false;
+            }
+            else
+            {
+                if (currentCharacter == '<' && nextCharacter == '\\')
+                {
+                    checkEvent = true;
+                    continue;
+                }
+            }
             line.Append(currentCharacter);
 
             if (((IsLatin(currentCharacter) && IsLatin(preCharacter)) && (IsLatin(currentCharacter) && !IsLatin(preCharacter))) ||

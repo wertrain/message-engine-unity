@@ -52,6 +52,14 @@ public class MessageEngine
     }
     private List<EngineEvent> eventList;
 
+    private enum EventText
+    {
+        FirstChar = '@',
+        SecondChar = '@',
+        Count = 3
+    }
+
+
     public MessageEngine(UnityEngine.UI.Text uiText)
     {
         messageUI = uiText;
@@ -148,10 +156,9 @@ public class MessageEngine
             }
             else if (messageUI != null)
             {
-                int findIndex = eventList.FindIndex(item => item.Index == currentIndex);
-                if (findIndex > 0)
+                if (eventList.Count > 0 && eventList[0].Index == currentIndex)
                 {
-                    EngineEvent engineEvent = eventList[findIndex];
+                    EngineEvent engineEvent = eventList[0];
                     switch (engineEvent.Type)
                     {
                         case EngineEventType.Wait:
@@ -186,7 +193,8 @@ public class MessageEngine
         StringBuilder originalMessage = new StringBuilder();
 
         float lineWidth = 0;
-        foreach (var originalLine in GetWordList(msg))
+        int skipCount = 0;
+        foreach (var originalLine in GetWordList(msg, out skipCount))
         {
             string newText = lineBuilder.ToString() + originalLine;
             if (rectTransform.rect.height <= GetTextHeight(newText))
@@ -219,16 +227,19 @@ public class MessageEngine
             lineBuilder.Append(originalLine);
         }
 
-        nextMessageIndex += originalMessage.Length;
+        nextMessageIndex += originalMessage.Length + skipCount;
         return lineBuilder.ToString();
     }
 
-    private List<string> GetWordList(string tmpText)
+    private List<string> GetWordList(string tmpText, out int skipCount)
     {
         List<string> words = new List<string>();
         StringBuilder line = new StringBuilder();
+        int length = 0;
         char emptyChar = new char();
         bool checkEvent = false;
+        const int eventTextCount = (int)EventText.Count;
+        skipCount = 0;
 
         for (int characterCount = 0; characterCount < tmpText.Length; characterCount++)
         {
@@ -239,21 +250,29 @@ public class MessageEngine
             // イベントの処理（仮）
             if (checkEvent)
             {
-                switch (nextCharacter)
+                switch (currentCharacter)
                 {
                     case 'p':
-                        eventList.Add(new EngineEvent() {
-                            Index = line.Length,
+                        skipCount += eventTextCount;
+                        return words;
+                    case 't':
+                        eventList.Add(new EngineEvent()
+                        {
+                            Index = length,
                             Type = EngineEventType.Wait,
                         });
                         break;
+                    default:
+                        break;
                 }
                 checkEvent = false;
+                continue;
             }
             else
             {
-                if (currentCharacter == '<' && nextCharacter == '\\')
+                if (currentCharacter == (char)EventText.FirstChar && nextCharacter == (char)EventText.SecondChar)
                 {
+                    ++characterCount;
                     checkEvent = true;
                     continue;
                 }
@@ -265,6 +284,7 @@ public class MessageEngine
                 (!IsLatin(nextCharacter) && !CHECK_HYP_FRONT(nextCharacter) && !CHECK_HYP_BACK(currentCharacter)) ||
                 (characterCount == tmpText.Length - 1))
             {
+                length += line.Length;
                 words.Add(line.ToString());
                 line = new StringBuilder();
                 continue;

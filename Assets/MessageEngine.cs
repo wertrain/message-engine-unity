@@ -29,6 +29,8 @@ public class MessageEngine
     private int currentIndex;
     /** 時刻をカウント */
     private float currentTime;
+    /** 待ち時間をカウント */
+    private float waitTime;
 
     private enum Sequence
     {
@@ -36,6 +38,7 @@ public class MessageEngine
         MakePage,       /** ページメッセージ作成中 */
         Progress,       /** 進行中 */
         WaitNextPage,   /** ページ送り待機中 */
+        WaitLittle,     /** 少し待つ */
         Complete,       /** 動作完了 */
     };
     /** エンジンのシーケンス */
@@ -58,7 +61,6 @@ public class MessageEngine
         SecondChar = '@',
         Count = 3
     }
-
 
     public MessageEngine(UnityEngine.UI.Text uiText)
     {
@@ -129,6 +131,9 @@ public class MessageEngine
             case Sequence.Progress:
                 SequenceProgress();
                 break;
+            case Sequence.WaitLittle:
+                SequenceWaitLittle();
+                break;
         }
     }
 
@@ -162,12 +167,22 @@ public class MessageEngine
                     switch (engineEvent.Type)
                     {
                         case EngineEventType.Wait:
+                            sequence = Sequence.WaitLittle;
+                            waitTime = Time.time;
                             break;
                     }
                     eventList.Remove(engineEvent);
                 }
                 messageUI.text = currentMessage.Substring(0, currentIndex);
             }
+        }
+    }
+
+    private void SequenceWaitLittle()
+    {
+        if (waitTime + 2.0 < Time.time)
+        {
+            sequence = Sequence.Progress;
         }
     }
 

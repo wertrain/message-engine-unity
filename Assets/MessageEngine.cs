@@ -277,8 +277,6 @@ public class MessageEngine
                             Type = EngineEventType.Wait,
                         });
                         break;
-                    default:
-                        break;
                 }
                 checkEvent = false;
                 continue;
@@ -292,6 +290,7 @@ public class MessageEngine
                     continue;
                 }
             }
+            ++length;
             line.Append(currentCharacter);
 
             if (((IsLatin(currentCharacter) && IsLatin(preCharacter)) && (IsLatin(currentCharacter) && !IsLatin(preCharacter))) ||
@@ -299,7 +298,6 @@ public class MessageEngine
                 (!IsLatin(nextCharacter) && !CHECK_HYP_FRONT(nextCharacter) && !CHECK_HYP_BACK(currentCharacter)) ||
                 (characterCount == tmpText.Length - 1))
             {
-                length += line.Length;
                 words.Add(line.ToString());
                 line = new StringBuilder();
                 continue;

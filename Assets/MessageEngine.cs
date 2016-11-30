@@ -31,6 +31,8 @@ public class MessageEngine
     private float currentTime;
     /** 待ち時間をカウント */
     private float waitTime;
+    /** 改行数をカウント */
+    private int newlineCount;
 
     private enum Sequence
     {
@@ -161,7 +163,7 @@ public class MessageEngine
             }
             else if (messageUI != null)
             {
-                if (eventList.Count > 0 && eventList[0].Index == currentIndex)
+                if (eventList.Count > 0 && (eventList[0].Index + newlineCount) == currentIndex)
                 {
                     EngineEvent engineEvent = eventList[0];
                     switch (engineEvent.Type)
@@ -209,6 +211,9 @@ public class MessageEngine
 
         float lineWidth = 0;
         int skipCount = 0;
+        int textCount = 0;
+        int newlineCount = 0;
+        int eventIndex = 0;
         foreach (var originalLine in GetWordList(msg, out skipCount))
         {
             string newText = lineBuilder.ToString() + originalLine;
@@ -233,12 +238,21 @@ public class MessageEngine
                 {
                     lineBuilder.Append(Environment.NewLine);
                     lineWidth = GetTextWidth(originalLine);
-                    
+                    ++newlineCount;
                     if (rectTransform.rect.height <= GetTextHeight(lineBuilder.ToString()))
                         break;
                 }
             }
             originalMessage.Append(originalLine);
+            textCount += originalLine.Length;
+            // 後で追加された改行の数をカウントして、イベント判定インデックスを進めておく
+            if (eventList.Count > eventIndex && eventList[eventIndex].Index < textCount)
+            {
+                EngineEvent engineEvent = eventList[eventIndex];
+                engineEvent.Index = engineEvent.Index + (newlineCount * 2);
+                eventList[eventIndex] = engineEvent;
+                ++eventIndex;
+            }
             lineBuilder.Append(originalLine);
         }
 

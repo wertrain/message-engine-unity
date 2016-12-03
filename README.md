@@ -15,4 +15,4 @@
 * [‹ó‘z‹Èü](http://kopacurve.blog33.fc2.com/)
 * [‚«‚ëš](http://www.ez0.net/distribution/font/kiloji/)
 
-![Screenshot](https://raw.githubusercontent.com/wertrain/message-engine-unity/master/Screenshots/01.png)  
+![Screenshot](https://raw.githubusercontent.com/wertrain/message-engine-unity/master/Screenshots/02.png)  

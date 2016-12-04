@@ -1,6 +1,6 @@
 # message-engine-unity
 
-## RPG風メッセージウィンドウ
+## 簡易RPG風メッセージウィンドウ
 
 ### 実装済み
 

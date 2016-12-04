@@ -30,6 +30,8 @@ public class MessageEngine
     /** 時刻をカウント */
     private float currentTime;
     /** 待ち時間をカウント */
+    private float waitTimeStart;
+    /** 待ち時間 */
     private float waitTime;
     /** 改行数をカウント */
     private int newlineCount;
@@ -55,6 +57,7 @@ public class MessageEngine
     {
         public int Index { get; set; }
         public EngineEventType Type { get; set; }
+        public int IntParam { get; set; }
     }
     private List<EngineEvent> eventList;
     /** イベントを示すテキスト */
@@ -171,7 +174,8 @@ public class MessageEngine
                     {
                         case EngineEventType.Wait:
                             sequence = Sequence.WaitLittle;
-                            waitTime = Time.time;
+                            waitTimeStart = Time.time;
+                            waitTime = engineEvent.IntParam;
                             break;
                     }
                     eventList.Remove(engineEvent);
@@ -183,7 +187,7 @@ public class MessageEngine
 
     private void SequenceWaitLittle()
     {
-        if (waitTime + 2.0 < Time.time)
+        if (waitTimeStart + waitTime < Time.time)
         {
             sequence = Sequence.Progress;
         }
@@ -286,11 +290,21 @@ public class MessageEngine
                         skipCount += eventTextCount;
                         return words;
                     case 't':
-                        eventList.Add(new EngineEvent()
+                        try
                         {
-                            Index = length,
-                            Type = EngineEventType.Wait,
-                        });
+                            int second = int.Parse(nextCharacter.ToString());
+                            eventList.Add(new EngineEvent()
+                            {
+                                Index = length,
+                                Type = EngineEventType.Wait,
+                                IntParam = second,
+                            });
+                            ++characterCount; // 秒指定の分
+                        }
+                        catch(Exception)
+                        {
+                            Debug.LogError("invalid char.");
+                        }
                         break;
                 }
                 checkEvent = false;
